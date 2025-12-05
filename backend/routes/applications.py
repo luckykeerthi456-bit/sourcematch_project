@@ -1,0 +1,311 @@
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, Query, Body
+from ..models import SessionLocal, Application, Job, User, init_db
+from ..utils import parser, scoring as scoring_utils
+from typing import List, Optional
+import re
+from ..schemas import JobScore
+import uuid, os
+from ..schemas import ApplyResult
+from ..models import MatchSearch, MatchResult
+from ..auth import SECRET_KEY, ALGORITHM
+from jose import jwt
+from fastapi import Header
+
+router = APIRouter()
+
+# Normalize any stored score variants to 0.0 - 1.0 range for stable frontend display
+def normalize_score_value(s):
+    """Normalize various possible stored score formats into a 0.0-1.0 float.
+
+    Handles:
+    - already 0-1 floats (returns as-is)
+    - values in 1..100 (likely a percent like 8.86) => divide by 100
+    - values >100 (unexpected) => divide by 100 and clamp
+    - None or invalid => 0.0
+    """
+    try:
+        if s is None:
+            return 0.0
+        val = float(s)
+    except Exception:
+        return 0.0
+    # If already within 0..1, just clamp
+    if 0.0 <= val <= 1.0:
+        return max(0.0, min(1.0, val))
+    # If value looks like percent or was scaled (e.g. 8.86 -> 0.0886), divide by 100
+    if val > 1.0:
+        val = val / 100.0
+    return max(0.0, min(1.0, val))
+
+
+# Accept either form-encoded or JSON body for status updates. JSON is preferred.
+from pydantic import BaseModel
+
+
+class StatusUpdate(BaseModel):
+    status: str
+
+@router.post("/apply", response_model=ApplyResult)
+async def apply(job_id: int = Form(...), candidate_id: int = Form(...), resume: UploadFile = File(...)):
+    db = SessionLocal()
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    # save file
+    filename = f"{uuid.uuid4().hex}_{resume.filename}"
+    path = os.path.join("resumes", filename)
+    contents = await resume.read()
+    with open(path, "wb") as f:
+        f.write(contents)
+    text, fingerprint = parser.extract_text_and_fingerprint(path)
+    app = Application(job_id=job_id, candidate_id=candidate_id, resume_path=path, resume_text=text, fingerprint=fingerprint)
+    db.add(app); db.commit(); db.refresh(app)
+    # score (sync call to ML scoring for prototype)
+    score, explanation = scoring_utils.score_job_application({"description": job.description, "requirements": job.requirements}, {"resume_text": text, "fingerprint": fingerprint})
+    # assign via setattr to avoid static type-checker treating class attributes as Column objects
+    setattr(app, "score", float(score))
+    setattr(app, "explanation", explanation)
+    db.add(app); db.commit(); db.refresh(app)
+    return {"status": "ok", "application_id": app.id}
+
+
+@router.post("/score", response_model=List[JobScore])
+async def score_resume(resume: UploadFile = File(...), top_k: int = 10, min_score: float = 0.0):
+    """Accept a resume upload, run the parser + scoring against every Job,
+    and return a ranked list of jobs with their score and explanation.
+    This endpoint does not create Application records; it's a lightweight
+    matching helper for the UI.
+    """
+    db = SessionLocal()
+    # ensure resumes dir exists
+    os.makedirs("resumes", exist_ok=True)
+    filename = f"{uuid.uuid4().hex}_{resume.filename}"
+    path = os.path.join("resumes", filename)
+    contents = await resume.read()
+    with open(path, "wb") as f:
+        f.write(contents)
+    text, fingerprint = parser.extract_text_and_fingerprint(path)
+
+    jobs = db.query(Job).all()
+    results = []
+    for job in jobs:
+        score, explanation = scoring_utils.score_job_application({"description": job.description, "requirements": job.requirements}, {"resume_text": text, "fingerprint": fingerprint})
+        # normalize score now so persisted results are consistent (0.0-1.0)
+        normalized = normalize_score_value(score)
+        results.append({
+            "job_id": job.id,
+            "job_title": job.title,
+            "job_description": job.description,
+            "score": float(normalized),
+            "explanation": explanation,
+            "matched_skills": explanation.get("matched_skills", []),
+        })
+
+    # sort descending by score and apply min_score / top_k
+    results.sort(key=lambda r: r["score"], reverse=True)
+    filtered = [r for r in results if r["score"] >= float(min_score)]
+    top = filtered[: int(top_k)]
+
+    # Persist the match search and results. Try to extract user id from Authorization header if present.
+    candidate_id = None
+    try:
+        # If Authorization header provided as 'Bearer <token>'
+        auth = None
+        # FastAPI doesn't inject headers here - attempt to read environ fallback
+        # We expect callers to provide Authorization header; try to decode from request headers via starlette request is not available here.
+        # As a fallback we won't attach candidate_id.
+        pass
+    except Exception:
+        candidate_id = None
+
+    try:
+        ms = MatchSearch(candidate_id=candidate_id, resume_path=path, fingerprint=fingerprint)
+        db.add(ms); db.commit(); db.refresh(ms)
+        for r in top:
+            # ensure score stored as normalized 0-1 float
+            mr_score = normalize_score_value(r.get("score"))
+            mr = MatchResult(
+                search_id=ms.id,
+                job_id=r.get("job_id"),
+                job_title=r.get("job_title"),
+                score=mr_score,
+                explanation=r.get("explanation"),
+                matched_skills=r.get("matched_skills"),
+            )
+            db.add(mr)
+        db.commit()
+    except Exception:
+        # don't fail scoring if persistence fails; just log
+        try:
+            import logging
+            logging.getLogger(__name__).exception("Failed to persist match search")
+        except Exception:
+            pass
+
+    return top
+
+
+@router.get("/history")
+def list_match_history(limit: int = 20):
+    db = SessionLocal()
+    searches = db.query(MatchSearch).order_by(MatchSearch.created_at.desc()).limit(limit).all()
+    out = []
+    for s in searches:
+        results = db.query(MatchResult).filter(MatchResult.search_id == s.id).order_by(MatchResult.score.desc()).all()
+        out.append({
+            "search_id": s.id,
+            "candidate_id": s.candidate_id,
+            "resume_path": s.resume_path,
+            "fingerprint": s.fingerprint,
+            "created_at": s.created_at.isoformat(),
+            "results": [{"job_id": r.job_id, "job_title": r.job_title, "score": normalize_score_value(r.score), "matched_skills": r.matched_skills, "explanation": r.explanation} for r in results]
+        })
+    return out
+
+
+@router.get("/recruiter/applications")
+def get_recruiter_applications(recruiter_id: Optional[int] = None, job_id: Optional[int] = None, status: Optional[str] = None):
+    """Get applications for recruiter's jobs with candidate details"""
+    db = SessionLocal()
+    
+    query = db.query(Application).join(Job).join(User, Application.candidate_id == User.id)
+    
+    if recruiter_id:
+        query = query.filter(Job.recruiter_id == recruiter_id)
+    
+    if job_id:
+        query = query.filter(Application.job_id == job_id)
+    
+    if status:
+        query = query.filter(Application.status == status)
+    
+    applications = query.order_by(Application.created_at.desc()).all()
+    
+    result = []
+    for app in applications:
+        candidate = db.query(User).filter(User.id == app.candidate_id).first()
+        job = db.query(Job).filter(Job.id == app.job_id).first()
+        
+        result.append({
+            "application_id": app.id,
+            "job_id": app.job_id,
+            "job_title": job.title if job else "Unknown",
+            "candidate_id": app.candidate_id,
+            "candidate_name": candidate.full_name if candidate else "Unknown",
+            "candidate_email": candidate.email if candidate else "Unknown",
+            "resume_path": app.resume_path,
+            "score": normalize_score_value(app.score),
+            "status": app.status,
+            "explanation": app.explanation,
+            "created_at": app.created_at.isoformat(),
+        })
+    
+    return result
+
+
+@router.get("/recruiter/applications/{application_id}")
+def get_application_details(application_id: int):
+    """Get detailed application info with candidate profile"""
+    db = SessionLocal()
+    
+    app = db.query(Application).filter(Application.id == application_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    candidate = db.query(User).filter(User.id == app.candidate_id).first()
+    job = db.query(Job).filter(Job.id == app.job_id).first()
+    
+    # build response and try to extract profile details from resume_text
+    resume_text = str(app.resume_text or "")
+    # attempt to use ML helper to extract skills; import lazily to avoid import-time issues
+    candidate_skills = []
+    try:
+        from ml.scoring_service import extract_skills_from_text
+
+        candidate_skills = extract_skills_from_text(resume_text)[:20]
+    except Exception:
+        candidate_skills = []
+
+    dob = None
+    m = re.search(r"(\d{2}[/-]\d{2}[/-]\d{4})|(\d{4}[/-]\d{2}[/-]\d{2})", resume_text)
+    if m:
+        dob = m.group(0)
+
+    year_of_passing = None
+    y = re.search(r"(?:year of passing|graduat(?:ed|ion) in|passed in|class of)\s*[:\-]?\s*([12][0-9]{3})", resume_text, re.I)
+    if y:
+        year_of_passing = y.group(1)
+
+    course = None
+    c = re.search(r"\b(B\.?Sc|BSc|B\.?Tech|BTech|Bachelor of [A-Za-z ]+|Master of [A-Za-z ]+|M\.?Sc|MBA|B\.?E\.?)\b", resume_text, re.I)
+    if c:
+        course = c.group(0)
+
+    return {
+        "application_id": app.id,
+        "job_id": app.job_id,
+        "job_title": job.title if job else "Unknown",
+        "job_description": job.description if job else "",
+        "candidate_id": app.candidate_id,
+        "candidate_name": candidate.full_name if candidate else "Unknown",
+        "candidate_email": candidate.email if candidate else "Unknown",
+        "resume_path": app.resume_path,
+        "resume_text": resume_text,
+        "score": normalize_score_value(app.score),
+        "status": app.status,
+        "explanation": app.explanation,
+        "created_at": app.created_at.isoformat(),
+        "candidate_skills": candidate_skills,
+        "date_of_birth": dob,
+        "year_of_passing": year_of_passing,
+        "course": course,
+    }
+
+
+@router.put("/recruiter/applications/{application_id}/status")
+def update_application_status(
+    application_id: int,
+    status: Optional[str] = Form(None),
+    payload: Optional[StatusUpdate] = Body(None),
+):
+    """Update application status (applied, shortlisted, rejected).
+
+    This endpoint accepts either a multipart/form-data form field `status`
+    (used by the frontend when sending FormData) or a JSON body like
+    `{ "status": "rejected" }`. JSON is preferred but form data is
+    still supported for backward compatibility.
+    """
+    db = SessionLocal()
+
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        # Prefer JSON payload when provided
+        status_val = None
+        if payload and getattr(payload, "status", None):
+            status_val = payload.status
+        elif status:
+            status_val = status
+
+        if not status_val:
+            raise HTTPException(status_code=400, detail="Missing 'status' in request body or form data")
+
+        valid_statuses = ["applied", "shortlisted", "rejected"]
+        if status_val not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+
+        setattr(app, "status", status_val)
+        db.commit()
+        db.refresh(app)
+
+        return {
+            "status": "ok",
+            "application_id": app.id,
+            "new_status": app.status,
+            "updated_at": app.created_at.isoformat(),
+        }
+    finally:
+        db.close()
+

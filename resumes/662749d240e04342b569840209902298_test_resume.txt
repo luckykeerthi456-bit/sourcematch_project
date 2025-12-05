@@ -1,0 +1,12 @@
+
+John Doe
+john@example.com
+
+SKILLS
+- JavaScript, Python, React, Node.js
+- SQL, MongoDB, PostgreSQL
+- AWS, Docker, Kubernetes
+
+EXPERIENCE
+Senior Developer at Tech Corp (2020-Present)
+- Led development of microservices

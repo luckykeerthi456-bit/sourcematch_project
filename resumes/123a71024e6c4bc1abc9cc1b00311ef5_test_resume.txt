@@ -1,0 +1,32 @@
+
+John Smith
+john@example.com
+(555) 123-4567
+
+PROFESSIONAL SUMMARY
+Full-stack developer with 5+ years of professional experience in web development.
+Specializing in React, Node.js, and Python.
+
+TECHNICAL SKILLS
+- JavaScript, Python, Java
+- React, Vue.js, Angular
+- Node.js, Express, FastAPI
+- PostgreSQL, MongoDB, Redis
+- AWS, Docker, Kubernetes
+- Git, CI/CD, Agile
+
+PROFESSIONAL EXPERIENCE
+Senior Full Stack Developer - Tech Corp (2021-Present)
+- Led development of microservices architecture
+- Improved API performance by 40%
+- Mentored 3 junior developers
+- 4 years of Python experience
+
+Full Stack Developer - StartupXYZ (2019-2021)
+- Built React and Node.js applications
+- Implemented REST and GraphQL APIs
+- 3 years total JavaScript experience
+
+EDUCATION
+BS in Computer Science - State University (2018)
+        
