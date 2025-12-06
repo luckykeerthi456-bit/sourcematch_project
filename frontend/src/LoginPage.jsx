@@ -26,8 +26,19 @@ export default function LoginPage({ onLoginSuccess }) {
       onLoginSuccess(res.data.user);
     } catch (err) {
       console.error("Login error:", err);
-      const serverMsg = err?.response?.data?.detail || err?.response?.data || err?.response?.statusText;
-      setMessage(serverMsg || err.message || "Login failed");
+      // Prefer structured server message when available
+      let serverMsg = err?.response?.data?.detail || err?.response?.data || err?.response?.statusText;
+      // Explicitly handle common cases
+      if (!serverMsg) {
+        if (err?.response?.status === 401) {
+          serverMsg = "Invalid credentials";
+        } else if (err?.message === "Network Error") {
+          serverMsg = "Network error: cannot reach the backend";
+        } else {
+          serverMsg = err?.message || "Login failed";
+        }
+      }
+      setMessage(serverMsg);
     } finally {
       setLoading(false);
     }
@@ -62,8 +73,15 @@ export default function LoginPage({ onLoginSuccess }) {
       onLoginSuccess(loginRes.data.user);
     } catch (err) {
       console.error("Registration error:", err);
-      const serverMsg = err?.response?.data?.detail || err?.response?.data || err?.response?.statusText;
-      setMessage(serverMsg || err.message || "Registration failed");
+      let serverMsg = err?.response?.data?.detail || err?.response?.data || err?.response?.statusText;
+      if (!serverMsg) {
+        if (err?.message === "Network Error") {
+          serverMsg = "Network error: cannot reach the backend";
+        } else {
+          serverMsg = err?.message || "Registration failed";
+        }
+      }
+      setMessage(serverMsg);
     } finally {
       setLoading(false);
     }
