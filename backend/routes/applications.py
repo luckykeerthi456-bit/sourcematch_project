@@ -63,6 +63,10 @@ async def apply(job_id: int = Form(...), candidate_id: int = Form(...), resume: 
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
+        # eagerly copy any fields we need from the job while the session is open
+        job_description = job.description
+        job_requirements = job.requirements
+
         app = Application(job_id=job_id, candidate_id=candidate_id, resume_path=path, resume_text=text, fingerprint=fingerprint)
         db.add(app)
         db.commit()
@@ -70,7 +74,8 @@ async def apply(job_id: int = Form(...), candidate_id: int = Form(...), resume: 
         app_id = app.id
 
     # score (sync call to ML scoring for prototype) outside DB session
-    score, explanation = scoring_utils.score_job_application({"description": job.description, "requirements": job.requirements}, {"resume_text": text, "fingerprint": fingerprint})
+    # Use the copied job fields to avoid accessing a detached SQLAlchemy instance
+    score, explanation = scoring_utils.score_job_application({"description": job_description, "requirements": job_requirements}, {"resume_text": text, "fingerprint": fingerprint})
 
     # reopen session to save score and explanation
     with SessionLocal() as db2:
