@@ -67,11 +67,13 @@ async def apply(job_id: int = Form(...), candidate_id: int = Form(...), resume: 
         job_description = job.description
         job_requirements = job.requirements
 
-        app = Application(job_id=job_id, candidate_id=candidate_id, resume_path=path, resume_text=text, fingerprint=fingerprint)
-        db.add(app)
-        db.commit()
-        db.refresh(app)
-        app_id = app.id
+    app = Application(job_id=job_id, candidate_id=candidate_id, resume_path=path, resume_text=text, fingerprint=fingerprint)
+    db.add(app)
+    # commit to persist and populate primary key; avoid db.refresh(app) because
+    # refreshing may trigger lazy-loading of related objects (e.g. Job)
+    db.commit()
+    # primary key should now be available on the instance
+    app_id = app.id
 
     # score (sync call to ML scoring for prototype) outside DB session
     # Use the copied job fields to avoid accessing a detached SQLAlchemy instance
