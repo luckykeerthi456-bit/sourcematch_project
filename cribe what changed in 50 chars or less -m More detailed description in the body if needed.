@@ -1,0 +1,15 @@
+warning: in the working copy of 'frontend/package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'uvicorn.err', LF will be replaced by CRLF the next time Git touches it
+.gitignore
+Attached HTML and CSS Context.txt
+STARTUP_GUIDE.md
+backend/auth.py
+backend/models.py
+backend/routes/applications.py
+backend/routes/jobs.py
+backend/routes/users.py
+login_wrong.json
+reg.json
+sourcematch.db
+uvicorn.err
+uvicorn.log
