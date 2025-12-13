@@ -46,13 +46,14 @@ except Exception:
 if not candidate_id:
     print('Could not determine candidate id from register response; attempting to read from /api/users (if available)')
 
-# Build multipart form data fields
-multipart = {
-    'job_id': (None, str(job_id)),
-    'candidate_id': (None, str(candidate_id or 0)),
-}
-# merge files
-multipart.update(files)
+# Build multipart form data fields as a list of tuples (name, value)
+multipart = [
+    ('job_id', (None, str(job_id))),
+    ('candidate_id', (None, str(candidate_id or 0))),
+]
+# add file entries
+for name, filetuple in files.items():
+    multipart.append((name, filetuple))
 
 r = client.post('/api/applications/apply', files=multipart)
 print('apply status', r.status_code)
