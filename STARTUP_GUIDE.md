@@ -174,7 +174,7 @@ If you're starting fresh:
 python -m venv venv
 
 # 2. Activate venv
-.\venv\Scripts\Activate.ps1
+python -m venv venv
 
 # 3. Install Python dependencies
 pip install -r requirements-backend.txt

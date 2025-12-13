@@ -10,3 +10,23 @@ INFO:     127.0.0.1:63464 - "OPTIONS /api/users/login HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63464 - "POST /api/users/login HTTP/1.1" 401 Unauthorized
 INFO:     127.0.0.1:51538 - "POST /api/users/login HTTP/1.1" 401 Unauthorized
 INFO:     127.0.0.1:52375 - "POST /api/users/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49462 - "OPTIONS /api/users/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49462 - "POST /api/users/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49462 - "OPTIONS /api/applications/recruiter/applications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63118 - "OPTIONS /api/applications/recruiter/applications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63118 - "GET /api/applications/recruiter/applications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63118 - "GET /api/applications/recruiter/applications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49489 - "OPTIONS /api/applications/recruiter/applications/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49489 - "GET /api/applications/recruiter/applications/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49489 - "OPTIONS /api/applications/recruiter/applications/1/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49489 - "PUT /api/applications/recruiter/applications/1/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49489 - "GET /api/applications/recruiter/applications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52108 - "GET /api/applications/recruiter/applications/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50638 - "OPTIONS /api/applications/recruiter/applications?status=applied HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50638 - "GET /api/applications/recruiter/applications?status=applied HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63620 - "OPTIONS /api/applications/recruiter/applications?status=shortlisted HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63620 - "GET /api/applications/recruiter/applications?status=shortlisted HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58702 - "OPTIONS /api/applications/recruiter/applications?status=rejected HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58702 - "GET /api/applications/recruiter/applications?status=rejected HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63500 - "GET /api/applications/recruiter/applications HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:53091 - "OPTIONS /api/users/login HTTP/1.1" 200 OK
