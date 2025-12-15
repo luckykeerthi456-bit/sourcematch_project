@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Toast from "./components/Toast";
-
-const API = "http://localhost:8000/api";
-
-export default function RecruiterDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("applications");
   const [applications, setApplications] = useState([]);
+  const [users, setUsers] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -33,6 +30,8 @@ export default function RecruiterDashboard({ user, onLogout }) {
   useEffect(() => {
     if (activeTab === "applications") {
       fetchApplications();
+    } else if (activeTab === "users") {
+      fetchUsers();
     }
   }, [activeTab, filterStatus]);
 
@@ -48,6 +47,19 @@ export default function RecruiterDashboard({ user, onLogout }) {
     } catch (err) {
       console.error("Failed to load applications:", err);
       setMessage("Failed to load applications");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(API + "/users/recruiter/users");
+      setUsers(res.data || []);
+    } catch (err) {
+      console.error("Failed to load users:", err);
+      setMessage("Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -109,6 +121,18 @@ export default function RecruiterDashboard({ user, onLogout }) {
       link.href = `/resumes/${resumePath.split("/").pop()}`;
       link.download = resumePath.split("/").pop();
       link.click();
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to permanently delete this user and their data?")) return;
+    try {
+      await axios.delete(API + `/users/recruiter/users/${userId}`);
+      setMessage("User deleted");
+      await fetchUsers();
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      setMessage(err?.response?.data?.detail || "Failed to delete user");
     }
   };
 
@@ -691,6 +715,62 @@ export default function RecruiterDashboard({ user, onLogout }) {
                     <p>No applications found</p>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* USERS TAB */}
+        {activeTab === "users" && (
+          <div>
+            <h2>Users</h2>
+            {loading ? (
+              <p>Loading users...</p>
+            ) : users && users.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {users.map((u) => (
+                  <div
+                    key={u.id}
+                    style={{
+                      background: "#fff",
+                      padding: 16,
+                      borderRadius: 12,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <p style={{ margin: "0 0 4px 0", fontWeight: 600 }}>{u.full_name || '—'}</p>
+                      <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>{u.email}</p>
+                      <p style={{ margin: 0, color: "#9ca3af", fontSize: 12 }}>{u.role}</p>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <p style={{ margin: 0, color: "#9ca3af", fontSize: 12 }}>
+                        {u.created_at ? new Date(u.created_at).toLocaleString() : ''}
+                      </p>
+                      <button
+                        onClick={() => deleteUser(u.id)}
+                        style={{
+                          padding: "8px 12px",
+                          background: "#ef4444",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: "#fff", padding: 24, borderRadius: 12, textAlign: "center", color: "#6b7280" }}>
+                <p>No users found</p>
               </div>
             )}
           </div>
