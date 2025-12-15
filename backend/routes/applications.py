@@ -335,6 +335,24 @@ def delete_application(application_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Application not found")
 
     try:
+        # attempt to remove associated resume file from disk if present and safe
+        try:
+            import os
+            resumes_dir = os.path.abspath("resumes")
+            file_path = None
+            if getattr(app, "resume_path", None):
+                rp = app.resume_path
+                file_path = os.path.abspath(str(rp))
+            if file_path and file_path.startswith(resumes_dir) and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).warning("Failed to delete application resume file: %s", file_path)
+        except Exception:
+            # best-effort only; swallow filesystem errors
+            pass
+
         db.delete(app)
         db.commit()
     except Exception:
