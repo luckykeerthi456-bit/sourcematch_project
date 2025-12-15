@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import Toast from "./components/Toast";
 
 const API = "http://localhost:8000/api";
 
@@ -140,7 +141,7 @@ export default function Dashboard({ user, onLogout }) {
 
   return (
     <div style={{ fontFamily: "Arial, sans-serif", background: "#F8FAFF", minHeight: "100vh" }}>
-      {/* Header */}
+  {/* Header */}
       <header
         style={{
           display: "flex",
@@ -156,6 +157,14 @@ export default function Dashboard({ user, onLogout }) {
           <h1 style={{ margin: "0 0 4px 0" }}>SourceMatch</h1>
           <p style={{ margin: 0, fontSize: 12, opacity: 0.9 }}>AI-Powered Job Matching</p>
         </div>
+        {/* Toast area (auto-dismiss) */}
+        {message && (
+          <Toast
+            message={message}
+            onClose={() => setMessage("")}
+            type={String(message).toLowerCase().includes("fail") || String(message).toLowerCase().includes("error") ? "error" : "success"}
+          />
+        )}
         <div style={{ textAlign: "right" }}>
           <p style={{ margin: "0 0 8px 0", fontSize: 14 }}>
             {user.full_name} • {user.role === "candidate" ? "👤 Job Seeker" : "👔 Recruiter"}
@@ -216,20 +225,6 @@ export default function Dashboard({ user, onLogout }) {
 
       {/* Main Content */}
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "24px" }}>
-        {message && (
-          <div
-            style={{
-              padding: 12,
-              marginBottom: 16,
-              background: message.includes("successfully") ? "#d1fae5" : "#fee2e2",
-              color: message.includes("successfully") ? "#065f46" : "#991b1b",
-              borderRadius: 8,
-              fontSize: 14,
-            }}
-          >
-            {message}
-          </div>
-        )}
 
         {/* HOME TAB */}
         {activeTab === "home" && (

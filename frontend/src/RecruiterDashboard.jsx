@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import Toast from "./components/Toast";
 
 const API = "http://localhost:8000/api";
 
@@ -86,6 +87,19 @@ export default function RecruiterDashboard({ user, onLogout }) {
       console.error("Failed to update status:", err);
       console.error("Error details:", err.response?.data);
       setMessage(err?.response?.data?.detail || "Failed to update status");
+    }
+  };
+
+  const deleteApplication = async (applicationId) => {
+    if (!window.confirm("Are you sure you want to delete this application? This cannot be undone.")) return;
+    try {
+      await axios.delete(API + `/applications/recruiter/applications/${applicationId}`);
+      setMessage("Application deleted");
+      setSelectedApp(null);
+      await fetchApplications();
+    } catch (err) {
+      console.error("Failed to delete application:", err);
+      setMessage(err?.response?.data?.detail || "Failed to delete application");
     }
   };
 
@@ -197,18 +211,11 @@ export default function RecruiterDashboard({ user, onLogout }) {
       {/* Main Content */}
       <main style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
         {message && (
-          <div
-            style={{
-              padding: 12,
-              marginBottom: 16,
-              background: message.includes("successfully") ? "#d1fae5" : "#fee2e2",
-              color: message.includes("successfully") ? "#065f46" : "#991b1b",
-              borderRadius: 8,
-              fontSize: 14,
-            }}
-          >
-            {message}
-          </div>
+          <Toast
+            message={message}
+            onClose={() => setMessage("")}
+            type={String(message).toLowerCase().includes("fail") || String(message).toLowerCase().includes("error") ? "error" : "success"}
+          />
         )}
 
         {/* APPLICATIONS TAB */}
@@ -514,6 +521,24 @@ export default function RecruiterDashboard({ user, onLogout }) {
                         }}
                       >
                         ✗ Reject
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button
+                        onClick={() => deleteApplication(selectedApp.application_id)}
+                        style={{
+                          padding: "12px 16px",
+                          background: "#ef4444",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          fontSize: 14,
+                        }}
+                      >
+                        🗑 Delete Application
                       </button>
                     </div>
 
