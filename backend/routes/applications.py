@@ -8,7 +8,7 @@ from ..schemas import JobScore
 import uuid, os
 from ..schemas import ApplyResult
 from ..models import MatchSearch, MatchResult
-from ..auth import SECRET_KEY, ALGORITHM
+from ..auth import SECRET_KEY, ALGORITHM, get_current_recruiter
 from jose import jwt
 from fastapi import Header
 
@@ -232,7 +232,7 @@ def delete_match_search(search_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/recruiter/applications")
-def get_recruiter_applications(recruiter_id: Optional[int] = None, job_id: Optional[int] = None, status: Optional[str] = None, db: Session = Depends(get_db)):
+def get_recruiter_applications(recruiter_id: Optional[int] = None, job_id: Optional[int] = None, status: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
     """Get applications for recruiter's jobs with candidate details"""
     query = db.query(Application).join(Job).join(User, Application.candidate_id == User.id)
     
@@ -270,7 +270,7 @@ def get_recruiter_applications(recruiter_id: Optional[int] = None, job_id: Optio
 
 
 @router.get("/recruiter/applications/{application_id}")
-def get_application_details(application_id: int, db: Session = Depends(get_db)):
+def get_application_details(application_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
     """Get detailed application info with candidate profile"""
 
     app = db.query(Application).filter(Application.id == application_id).first()
@@ -328,7 +328,7 @@ def get_application_details(application_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/recruiter/applications/{application_id}")
-def delete_application(application_id: int, db: Session = Depends(get_db)):
+def delete_application(application_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
     """Delete an application (used by recruiters)."""
     app = db.query(Application).filter(Application.id == application_id).first()
     if not app:
@@ -368,6 +368,7 @@ def update_application_status(
     status: Optional[str] = Form(None),
     payload: Optional[StatusUpdate] = Body(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_recruiter),
 ):
     """Update application status (applied, shortlisted, rejected).
 

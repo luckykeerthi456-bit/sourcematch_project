@@ -89,3 +89,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         return user
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def get_current_recruiter(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Dependency that returns current user if they are a recruiter, else raises 403."""
+    user = get_current_user(token=token, db=db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    if getattr(user, "role", None) != "recruiter":
+        raise HTTPException(status_code=403, detail="Recruiter role required")
+    return user

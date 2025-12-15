@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from ..models import get_db, User, init_db, Application, MatchSearch, MatchResult
 from ..schemas import UserCreate, UserOut
-from ..auth import get_password_hash, create_access_token, verify_password
+from ..auth import get_password_hash, create_access_token, verify_password, get_current_recruiter
 from pydantic import BaseModel
 import os, logging
 
@@ -40,7 +40,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/recruiter/users", response_model=List[UserOut])
-def list_users(role: Optional[str] = Query(None), db: Session = Depends(get_db)):
+def list_users(role: Optional[str] = Query(None), db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
     """List registered users. Recruiters can view candidates and other recruiters.
 
     Optional query param `role` can be used to filter by 'candidate' or 'recruiter'.
@@ -53,7 +53,7 @@ def list_users(role: Optional[str] = Query(None), db: Session = Depends(get_db))
 
 
 @router.delete("/recruiter/users/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
     """Delete a user and associated data (applications, match searches). Best-effort file cleanup for resumes/ files.
 
     NOTE: This endpoint is intended for recruiter/admin use only. The current project does not enforce authorization here,
