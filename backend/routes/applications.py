@@ -190,6 +190,47 @@ def list_match_history(limit: int = 20, db: Session = Depends(get_db)):
     return out
 
 
+@router.delete("/history/{search_id}")
+def delete_match_search(search_id: int, db: Session = Depends(get_db)):
+    """Delete a saved match search and its results (used by candidates to remove history)."""
+    ms = db.query(MatchSearch).filter(MatchSearch.id == search_id).first()
+    if not ms:
+        raise HTTPException(status_code=404, detail="Match search not found")
+
+    try:
+        # delete associated results first
+        db.query(MatchResult).filter(MatchResult.search_id == search_id).delete()
+        # attempt to remove the resume file from disk if it exists and is inside the resumes/ folder
+        try:
+            import os
+            # canonicalize paths
+            resumes_dir = os.path.abspath("resumes")
+            file_path = None
+            if getattr(ms, "resume_path", None):
+                # ensure we convert SQLAlchemy field to a plain string before using
+                rp = ms.resume_path
+                file_path = os.path.abspath(str(rp))
+            # only remove if the file is under the expected resumes directory
+            if file_path and file_path.startswith(resumes_dir) and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    # don't raise if file deletion fails; continue to remove DB rows
+                    import logging
+                    logging.getLogger(__name__).warning("Failed to delete resume file: %s", file_path)
+        except Exception:
+            # best-effort only; do not fail the whole operation for file system errors
+            pass
+
+        db.delete(ms)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete match history")
+
+    return {"status": "ok", "deleted_search_id": search_id}
+
+
 @router.get("/recruiter/applications")
 def get_recruiter_applications(recruiter_id: Optional[int] = None, job_id: Optional[int] = None, status: Optional[str] = None, db: Session = Depends(get_db)):
     """Get applications for recruiter's jobs with candidate details"""
@@ -284,6 +325,23 @@ def get_application_details(application_id: int, db: Session = Depends(get_db)):
         "year_of_passing": year_of_passing,
         "course": course,
     }
+
+
+@router.delete("/recruiter/applications/{application_id}")
+def delete_application(application_id: int, db: Session = Depends(get_db)):
+    """Delete an application (used by recruiters)."""
+    app = db.query(Application).filter(Application.id == application_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    try:
+        db.delete(app)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete application")
+
+    return {"status": "ok", "deleted_application_id": application_id}
 
 
 @router.put("/recruiter/applications/{application_id}/status")
