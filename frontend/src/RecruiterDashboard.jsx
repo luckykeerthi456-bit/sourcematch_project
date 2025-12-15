@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Toast from "./components/Toast";
+import ConfirmModal from "./components/ConfirmModal";
+export default function RecruiterDashboard({ API, user, onLogout }) {
   const [activeTab, setActiveTab] = useState("applications");
   const [applications, setApplications] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState(() => () => {});
   const [filterStatus, setFilterStatus] = useState("all");
 
   // Helper to format scores robustly to 0-100 percent
@@ -103,16 +108,21 @@ import Toast from "./components/Toast";
   };
 
   const deleteApplication = async (applicationId) => {
-    if (!window.confirm("Are you sure you want to delete this application? This cannot be undone.")) return;
-    try {
-      await axios.delete(API + `/applications/recruiter/applications/${applicationId}`);
-      setMessage("Application deleted");
-      setSelectedApp(null);
-      await fetchApplications();
-    } catch (err) {
-      console.error("Failed to delete application:", err);
-      setMessage(err?.response?.data?.detail || "Failed to delete application");
-    }
+    // open confirm modal and perform deletion if confirmed
+    setConfirmMessage("Are you sure you want to delete this application? This cannot be undone.");
+    setConfirmAction(() => async () => {
+      try {
+        await axios.delete(API + `/applications/recruiter/applications/${applicationId}`);
+        setMessage("Application deleted");
+        setSelectedApp(null);
+        await fetchApplications();
+      } catch (err) {
+        console.error("Failed to delete application:", err);
+        setMessage(err?.response?.data?.detail || "Failed to delete application");
+      }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const downloadResume = (resumePath) => {
@@ -125,15 +135,19 @@ import Toast from "./components/Toast";
   };
 
   const deleteUser = async (userId) => {
-    if (!window.confirm("Are you sure you want to permanently delete this user and their data?")) return;
-    try {
-      await axios.delete(API + `/users/recruiter/users/${userId}`);
-      setMessage("User deleted");
-      await fetchUsers();
-    } catch (err) {
-      console.error("Failed to delete user:", err);
-      setMessage(err?.response?.data?.detail || "Failed to delete user");
-    }
+    setConfirmMessage("Are you sure you want to permanently delete this user and all their data? This action cannot be undone.");
+    setConfirmAction(() => async () => {
+      try {
+        await axios.delete(API + `/users/recruiter/users/${userId}`);
+        setMessage("User deleted");
+        await fetchUsers();
+      } catch (err) {
+        console.error("Failed to delete user:", err);
+        setMessage(err?.response?.data?.detail || "Failed to delete user");
+      }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const getStatusColor = (status) => {
@@ -241,6 +255,19 @@ import Toast from "./components/Toast";
             type={String(message).toLowerCase().includes("fail") || String(message).toLowerCase().includes("error") ? "error" : "success"}
           />
         )}
+        <ConfirmModal
+          open={confirmOpen}
+          title={"Please confirm"}
+          message={confirmMessage}
+          onConfirm={() => {
+            try {
+              confirmAction();
+            } catch (e) {
+              // if confirmAction is async, it already runs; swallow errors here
+            }
+          }}
+          onCancel={() => setConfirmOpen(false)}
+        />
 
         {/* APPLICATIONS TAB */}
         {activeTab === "applications" && (
