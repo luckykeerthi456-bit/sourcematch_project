@@ -126,6 +126,18 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
+  const deleteHistory = async (searchId) => {
+    if (!window.confirm("Are you sure you want to delete this search history entry? This cannot be undone.")) return;
+    try {
+      await axios.delete(API + `/applications/history/${searchId}`);
+      setMessage("History entry deleted");
+      await fetchHistory();
+    } catch (err) {
+      console.error("Failed to delete history:", err);
+      setMessage(err?.response?.data?.detail || "Failed to delete history");
+    }
+  };
+
   return (
     <div style={{ fontFamily: "Arial, sans-serif", background: "#F8FAFF", minHeight: "100vh" }}>
       {/* Header */}
@@ -618,6 +630,22 @@ export default function Dashboard({ user, onLogout }) {
                               new Date(search.created_at).toLocaleTimeString()
                             : "Date unknown"}
                         </p>
+                        <button
+                          onClick={() => deleteHistory(search.search_id)}
+                          style={{
+                            marginTop: 8,
+                            padding: "6px 10px",
+                            background: "#fff",
+                            border: "1px solid #ef4444",
+                            color: "#ef4444",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
 
