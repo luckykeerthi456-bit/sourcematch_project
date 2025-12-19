@@ -3,6 +3,19 @@ import axios from "axios";
 import LoginPage from "./LoginPage";
 import Dashboard from "./Dashboard";
 import RecruiterDashboard from "./RecruiterDashboard";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+
+const theme = createTheme({
+  palette: {
+    primary: { main: "#3b82f6" },
+    secondary: { main: "#6b7280" },
+    background: { default: "#f4f6fb" },
+  },
+  typography: {
+    fontFamily: 'Inter, Roboto, Arial, sans-serif',
+  },
+});
 
 export default function App() {
   const [user, setUser] = useState(null);
