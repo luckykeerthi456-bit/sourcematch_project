@@ -13,6 +13,15 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState(() => () => {});
   const [filterStatus, setFilterStatus] = useState("all");
+  // Job posting form state for recruiters
+  const [jobTitle, setJobTitle] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
+  const [company, setCompany] = useState("");
+  const [location, setLocation] = useState("");
+  const [salaryMin, setSalaryMin] = useState("");
+  const [salaryMax, setSalaryMax] = useState("");
+  const [experienceLevel, setExperienceLevel] = useState("Mid-level");
+  const [requiredSkills, setRequiredSkills] = useState("");
 
   // Helper to format scores robustly to 0-100 percent
   const formatPercent = (score) => {
@@ -222,7 +231,9 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
       >
         {[
           { id: "applications", label: "📋 Applications", show: true },
-          { id: "stats", label: "📊 Statistics", show: true },
+          { id: "post_job", label: "➕ Post Job", show: true },
+          { id: "users", label: "� Users", show: true },
+          { id: "stats", label: "�📊 Statistics", show: true },
         ].map(
           (tab) =>
             tab.show && (
@@ -748,6 +759,99 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
         )}
 
         {/* USERS TAB */}
+        {/* POST JOB TAB */}
+        {activeTab === "post_job" && (
+          <div>
+            <h2>Post a New Job</h2>
+            <div style={{ maxWidth: 800, background: "#fff", padding: 20, borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Job Title</label>
+              <input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} style={{ width: "100%", padding: 8, marginBottom: 12 }} />
+
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Company</label>
+              <input value={company} onChange={(e) => setCompany(e.target.value)} style={{ width: "100%", padding: 8, marginBottom: 12 }} />
+
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Location</label>
+              <input value={location} onChange={(e) => setLocation(e.target.value)} style={{ width: "100%", padding: 8, marginBottom: 12 }} />
+
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Description</label>
+              <textarea value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} rows={6} style={{ width: "100%", padding: 8, marginBottom: 12 }} />
+
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Required skills (comma separated)</label>
+              <input value={requiredSkills} onChange={(e) => setRequiredSkills(e.target.value)} style={{ width: "100%", padding: 8, marginBottom: 12 }} />
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Salary Min</label>
+                  <input value={salaryMin} onChange={(e) => setSalaryMin(e.target.value)} type="number" style={{ width: "100%", padding: 8 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Salary Max</label>
+                  <input value={salaryMax} onChange={(e) => setSalaryMax(e.target.value)} type="number" style={{ width: "100%", padding: 8 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Experience</label>
+                  <select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} style={{ width: "100%", padding: 8 }}>
+                    <option>Entry-level</option>
+                    <option>Mid-level</option>
+                    <option>Senior</option>
+                    <option>Lead</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+                <button
+                  onClick={async () => {
+                    // basic client-side validation
+                    if (!jobTitle.trim() || !jobDescription.trim()) {
+                      setMessage("Please provide a job title and description");
+                      return;
+                    }
+                    try {
+                      setLoading(true);
+                      const payload = {
+                        title: jobTitle,
+                        description: jobDescription,
+                        company: company || undefined,
+                        location: location || undefined,
+                        salary_min: salaryMin ? Number(salaryMin) : undefined,
+                        salary_max: salaryMax ? Number(salaryMax) : undefined,
+                        experience_level: experienceLevel,
+                        required_skills: requiredSkills || undefined,
+                      };
+                      const res = await axios.post(API + "/jobs", payload);
+                      setMessage("Job posted successfully");
+                      // reset form
+                      setJobTitle("");
+                      setJobDescription("");
+                      setCompany("");
+                      setLocation("");
+                      setSalaryMin("");
+                      setSalaryMax("");
+                      setRequiredSkills("");
+                      setExperienceLevel("Mid-level");
+                      // optionally go back to jobs list or applications
+                      setActiveTab("stats");
+                    } catch (err) {
+                      console.error("Failed to post job:", err);
+                      setMessage(err?.response?.data?.detail || "Failed to post job");
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  style={{ padding: "10px 16px", background: "#10b981", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+                >
+                  Publish Job
+                </button>
+
+                <button onClick={() => { setJobTitle(""); setJobDescription(""); setCompany(""); setLocation(""); setSalaryMin(""); setSalaryMax(""); setRequiredSkills(""); setExperienceLevel("Mid-level"); }} style={{ padding: "10px 16px", background: "#e5e7eb", border: "none", borderRadius: 6, cursor: "pointer" }}>
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "users" && (
           <div>
             <h2>Users</h2>
