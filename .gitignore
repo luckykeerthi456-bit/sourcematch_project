@@ -4,3 +4,7 @@ node_modules/
 dist/
 .env
 .sourcematch.db
+Attached HTML and CSS Context.txt
+login_wrong.json
+reg.json
+resumes/

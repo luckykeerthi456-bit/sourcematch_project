@@ -6,6 +6,13 @@ import RecruiterDashboard from "./RecruiterDashboard";
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const API = "http://localhost:8000/api";
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    delete axios.defaults.headers.common["Authorization"];
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -14,14 +21,27 @@ export default function App() {
       axios.defaults.headers.common["Authorization"] = "Bearer " + token;
       setUser(JSON.parse(storedUser));
     }
-  }, []);
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    delete axios.defaults.headers.common["Authorization"];
-  };
+    // Response interceptor: if backend returns 401/403, force logout and redirect to login
+    const id = axios.interceptors.response.use(
+      (resp) => resp,
+      (error) => {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+          try {
+            // clear auth and reload to login
+            handleLogout();
+            window.location.reload();
+          } catch (e) {}
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.response.eject(id);
+    };
+  }, []);
 
   if (!user) {
     return <LoginPage onLoginSuccess={setUser} />;
@@ -29,7 +49,7 @@ export default function App() {
 
   // Route to appropriate dashboard based on user role
   if (user.role === "recruiter") {
-    return <RecruiterDashboard user={user} onLogout={handleLogout} />;
+    return <RecruiterDashboard API={API} user={user} onLogout={handleLogout} />;
   }
 
   return <Dashboard user={user} onLogout={handleLogout} />;

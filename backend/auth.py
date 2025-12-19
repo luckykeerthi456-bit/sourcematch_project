@@ -2,8 +2,10 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from fastapi import HTTPException, Depends
+from sqlalchemy.orm import Session
+from .models import get_db
 from fastapi.security import OAuth2PasswordBearer
-from .models import SessionLocal, User
+from .models import User
 import os
 import logging
 
@@ -77,14 +79,23 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return encoded_jwt
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        db = SessionLocal()
         user = db.query(User).filter(User.id == int(user_id)).first()
         return user
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def get_current_recruiter(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Dependency that returns current user if they are a recruiter, else raises 403."""
+    user = get_current_user(token=token, db=db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    if getattr(user, "role", None) != "recruiter":
+        raise HTTPException(status_code=403, detail="Recruiter role required")
+    return user
