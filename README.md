@@ -207,3 +207,17 @@ For issues or questions:
 - Check the troubleshooting section above
 - Review API docs at http://localhost:8000/docs (when backend is running)
 - Check browser console and network logs for error details
+
+## Release: Merge summary (my/local-changes → main)
+
+- Release tag: merge commit 5b48718d (2025-12-19)
+- Branch merged: `my/local-changes` into `main`
+- Highlights:
+   - Frontend: added a styled `ConfirmModal` and a small `Toast` component for consistent confirmations and brief notifications.
+   - Frontend: Recruiter portal improvements — Users tab (list/delete users), application delete flow wired to modal, and better status update logging.
+   - Backend: safe resume file cleanup when deleting applications or match searches (only deletes files under `resumes/`).
+   - Backend: fixed DB session lifecycle issues (short-lived sessions via `get_db()` / SessionLocal) and avoided DetachedInstanceError by copying needed ORM fields before closing sessions.
+   - Tests: added TestClient-based scripts for apply/delete/history flows to prevent regressions.
+   - Misc: small UX and auth fixes — axios restores Authorization header from localStorage and auto-logout on 401/403.
+
+If you want this release summarized as a GitHub release or tagged, tell me the tag name (e.g., `v0.2.0`) and I'd create it and push the tag.
