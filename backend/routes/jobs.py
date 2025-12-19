@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from ..models import get_db, Job, User, Company
 from ..schemas import JobCreate, JobOut
 from ..auth import get_current_user
+from ..models import Application, MatchResult
+from ..auth import get_current_recruiter
 
 router = APIRouter()
 
@@ -23,3 +25,26 @@ def create_job(payload: JobCreate, current_user: User = Depends(get_current_user
 def list_jobs(db: Session = Depends(get_db)):
     jobs = db.query(Job).all()
     return jobs
+
+
+@router.delete("/{job_id}")
+def delete_job(job_id: int, current_user: User = Depends(get_current_recruiter), db: Session = Depends(get_db)):
+    # Ensure job exists
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    # Only the recruiter who created the job may delete it
+    if getattr(job, "recruiter_id", None) != getattr(current_user, "id", None):
+        raise HTTPException(status_code=403, detail="Not allowed to delete this job")
+
+    # Delete dependent rows (applications, match results) manually to avoid FK issues
+    try:
+        db.query(Application).filter(Application.job_id == job_id).delete(synchronize_session=False)
+        db.query(MatchResult).filter(MatchResult.job_id == job_id).delete(synchronize_session=False)
+        db.delete(job)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete job: {e}")
+
+    return {"detail": "Job deleted"}
