@@ -6,6 +6,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
   const [activeTab, setActiveTab] = useState("applications");
   const [applications, setApplications] = useState([]);
   const [users, setUsers] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -46,6 +47,8 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
       fetchApplications();
     } else if (activeTab === "users") {
       fetchUsers();
+    } else if (activeTab === "jobs") {
+      fetchJobs();
     }
   }, [activeTab, filterStatus]);
 
@@ -74,6 +77,19 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
     } catch (err) {
       console.error("Failed to load users:", err);
       setMessage("Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchJobs = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(API + "/jobs");
+      setJobs(res.data || []);
+    } catch (err) {
+      console.error("Failed to load jobs:", err);
+      setMessage("Failed to load jobs");
     } finally {
       setLoading(false);
     }
@@ -159,6 +175,22 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
     setConfirmOpen(true);
   };
 
+  const deleteJob = async (jobId) => {
+    setConfirmMessage("Are you sure you want to delete this job? This cannot be undone.");
+    setConfirmAction(() => async () => {
+      try {
+        await axios.delete(API + `/jobs/${jobId}`);
+        setMessage("Job deleted");
+        await fetchJobs();
+      } catch (err) {
+        console.error("Failed to delete job:", err);
+        setMessage(err?.response?.data?.detail || "Failed to delete job");
+      }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "shortlisted":
@@ -234,6 +266,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
           { id: "post_job", label: "➕ Post Job", show: true },
           { id: "users", label: "� Users", show: true },
           { id: "stats", label: "�📊 Statistics", show: true },
+          { id: "jobs", label: "🛠️ Manage Jobs", show: true },
         ].map(
           (tab) =>
             tab.show && (
@@ -1036,6 +1069,90 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
                 <p style={{ color: "#6b7280" }}>No applications yet</p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* MANAGE JOBS TAB */}
+        {activeTab === "jobs" && (
+          <div>
+            <h2>Manage Jobs</h2>
+            {loading ? (
+              <p>Loading jobs...</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {jobs && jobs.length > 0 ? (
+                  jobs.map((job) => (
+                    <div
+                      key={job.id}
+                      style={{
+                        background: "#fff",
+                        padding: 16,
+                        borderRadius: 12,
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        transition: "all 0.3s",
+                        border: "2px solid transparent",
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: "0 0 4px 0", fontWeight: 600, fontSize: 16 }}>
+                          {job.title}
+                        </p>
+                        <p
+                          style={{
+                            margin: "0 0 8px 0",
+                            color: "#6b7280",
+                            fontSize: 14,
+                          }}
+                        >
+                          {job.company} • {job.location}
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          marginLeft: 16,
+                        }}
+                      >
+                        <button
+                          onClick={() => deleteJob(job.id)}
+                          style={{
+                            padding: "8px 12px",
+                            background: "#ef4444",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            fontSize: 14,
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div
+                    style={{
+                      background: "#fff",
+                      padding: 40,
+                      borderRadius: 12,
+                      textAlign: "center",
+                      color: "#6b7280",
+                    }}
+                  >
+                    <p>No jobs found</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>
