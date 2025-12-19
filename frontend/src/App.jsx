@@ -6,6 +6,7 @@ import RecruiterDashboard from "./RecruiterDashboard";
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const API = "http://localhost:8000/api";
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem("token");
@@ -48,7 +49,7 @@ export default function App() {
 
   // Route to appropriate dashboard based on user role
   if (user.role === "recruiter") {
-    return <RecruiterDashboard user={user} onLogout={handleLogout} />;
+    return <RecruiterDashboard API={API} user={user} onLogout={handleLogout} />;
   }
 
   return <Dashboard user={user} onLogout={handleLogout} />;
