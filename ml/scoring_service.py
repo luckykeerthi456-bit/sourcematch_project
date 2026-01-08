@@ -87,7 +87,7 @@ def _read_threshold_from_settings():
         return 0.62
 
 
-def match_required_skills(required_skills, resume_text):
+def match_required_skills(required_skills, resume_text, skill_embeddings=None):
     """Return list of required skills that semantically appear in resume_text.
 
     New strategy (semantic matching):
@@ -121,13 +121,26 @@ def match_required_skills(required_skills, resume_text):
     # similarity threshold for skill <-> resume matching (0-1)
     SKILL_SIM_THRESHOLD = _read_threshold_from_settings()
 
-    for skill in required_skills:
+    # If skill_embeddings provided, prefer using them to avoid recomputing embeddings
+    use_precomputed = skill_embeddings is not None and isinstance(skill_embeddings, (list, tuple)) and len(skill_embeddings) > 0
+
+    for idx, skill in enumerate(required_skills):
         if not skill:
             continue
-
-        # 1) Try semantic matching when model is available
+        # 1) Semantic matching using precomputed embedding if available
         matched = False
-        if model_available and resume_vec is not None:
+        if use_precomputed and idx < len(skill_embeddings):
+            try:
+                se = np.asarray(skill_embeddings[idx]).reshape(1, -1)
+                sim = float(cosine_similarity(se, resume_vec)[0][0]) if model_available and resume_vec is not None else 0.0
+                if sim >= SKILL_SIM_THRESHOLD:
+                    matches.append(skill)
+                    matched = True
+            except Exception:
+                matched = False
+
+        # 2) If not matched and model available, compute on-the-fly embedding for this skill
+        if not matched and model_available and resume_vec is not None:
             try:
                 skill_vec = embed(skill)
                 skill_vec = np.asarray(skill_vec).reshape(1, -1)
@@ -136,13 +149,12 @@ def match_required_skills(required_skills, resume_text):
                     matches.append(skill)
                     matched = True
             except Exception:
-                # Fall through to legacy matching on any error
                 matched = False
 
         if matched:
             continue
 
-        # 2) Legacy fallback: normalized substring or token-level check
+        # 3) Legacy fallback: normalized substring or token-level check
         skill_norm = normalize_text_for_matching(skill)
         if skill_norm and skill_norm in norm_text:
             matches.append(skill)
@@ -165,7 +177,8 @@ def score_job_application(job, application):
     emb_sim = float(cosine_similarity(job_vec_2d, resume_vec_2d)[0][0])
 
     req_skills = job.get("requirements", {}).get("required_skills", []) or []
-    matched = match_required_skills(req_skills, resume_text)
+    skill_embeddings = job.get("skill_embeddings", None)
+    matched = match_required_skills(req_skills, resume_text, skill_embeddings)
     skill_score = (len(matched) / max(1, len(req_skills))) if req_skills else 0.0
 
     experience_score = exp_years_match(job.get("requirements", {}).get("min_experience", 0), application)

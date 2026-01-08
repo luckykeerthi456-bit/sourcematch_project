@@ -106,6 +106,26 @@ class MatchResult(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Ensure legacy DBs get the new skill_embeddings column on Jobs.
+    # SQLite supports ALTER TABLE ADD COLUMN; for other DBs Alembic is preferred.
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            # Check if column exists (SQLite PRAGMA; works for sqlite)
+            res = conn.execute(text("PRAGMA table_info('jobs')"))
+            cols = [row[1] for row in res.fetchall()]
+            if 'skill_embeddings' not in cols:
+                try:
+                    conn.execute(text("ALTER TABLE jobs ADD COLUMN skill_embeddings JSON"))
+                except Exception:
+                    # Best-effort: some DBs may not support JSON type; try generic TEXT
+                    try:
+                        conn.execute(text("ALTER TABLE jobs ADD COLUMN skill_embeddings TEXT"))
+                    except Exception:
+                        pass
+    except Exception:
+        # If any of the above fails, we proceed; user should run proper migration in production.
+        pass
 
 if __name__ == "__main__":
     init_db()

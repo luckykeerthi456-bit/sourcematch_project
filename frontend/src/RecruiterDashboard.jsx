@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Toast from "./components/Toast";
 import ConfirmModal from "./components/ConfirmModal";
-import SettingsPanel from "./components/SettingsPanel";
 export default function RecruiterDashboard({ API, user, onLogout }) {
   const [activeTab, setActiveTab] = useState("applications");
   const [applications, setApplications] = useState([]);
@@ -224,9 +223,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
     { id: "stats", label: "�📊 Statistics", show: true },
     { id: "jobs", label: "🛠️ Manage Jobs", show: true },
   ];
-  if (isPrivileged) {
-    navTabs.push({ id: "settings", label: "⚙️ Settings", show: true });
-  }
+  // settings tab removed — settings moved out / disabled
 
   return (
     <div style={{ fontFamily: "Arial, sans-serif", background: "#F8FAFF", minHeight: "100vh" }}>
@@ -297,10 +294,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
               </button>
             )
         )}
-        {/* SETTINGS TAB (rendered only for privileged users) */}
-        {activeTab === "settings" && (
-          <SettingsPanel API={API} user={user} setMessage={setMessage} />
-        )}
+        {/* Settings tab removed */}
       </div>
 
       {/* Main Content */}

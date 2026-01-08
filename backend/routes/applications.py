@@ -66,6 +66,7 @@ async def apply(job_id: int = Form(...), candidate_id: int = Form(...), resume: 
         # eagerly copy any fields we need from the job while the session is open
         job_description = job.description
         job_requirements = job.requirements
+        job_skill_embeddings = getattr(job, "skill_embeddings", None)
 
     app = Application(job_id=job_id, candidate_id=candidate_id, resume_path=path, resume_text=text, fingerprint=fingerprint)
     db.add(app)
@@ -77,7 +78,7 @@ async def apply(job_id: int = Form(...), candidate_id: int = Form(...), resume: 
 
     # score (sync call to ML scoring for prototype) outside DB session
     # Use the copied job fields to avoid accessing a detached SQLAlchemy instance
-    score, explanation = scoring_utils.score_job_application({"description": job_description, "requirements": job_requirements}, {"resume_text": text, "fingerprint": fingerprint})
+    score, explanation = scoring_utils.score_job_application({"description": job_description, "requirements": job_requirements, "skill_embeddings": job_skill_embeddings}, {"resume_text": text, "fingerprint": fingerprint})
 
     # reopen session to save score and explanation
     with SessionLocal() as db2:
@@ -113,7 +114,7 @@ async def score_resume(resume: UploadFile = File(...), top_k: int = 10, min_scor
         jobs = db.query(Job).all()
     results = []
     for job in jobs:
-        score, explanation = scoring_utils.score_job_application({"description": job.description, "requirements": job.requirements}, {"resume_text": text, "fingerprint": fingerprint})
+        score, explanation = scoring_utils.score_job_application({"description": job.description, "requirements": job.requirements, "skill_embeddings": getattr(job, "skill_embeddings", None)}, {"resume_text": text, "fingerprint": fingerprint})
         # normalize score now so persisted results are consistent (0.0-1.0)
         normalized = normalize_score_value(score)
         results.append({
