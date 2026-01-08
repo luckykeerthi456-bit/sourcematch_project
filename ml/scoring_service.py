@@ -69,29 +69,69 @@ def normalize_text_for_matching(text: str) -> str:
 
 
 def match_required_skills(required_skills, resume_text):
-    """Return list of required skills that appear in resume_text.
+    """Return list of required skills that semantically appear in resume_text.
 
-    Matching strategy:
-    - Normalize both skill and resume text (lowercase, remove punctuation).
-    - Check for exact substring presence of normalized skill in normalized resume text.
-    - Also check token-level presence for multi-word skills.
+    New strategy (semantic matching):
+    - Prefer semantic similarity using sentence embeddings (embed).
+      For each required skill phrase, compute embedding and compare with
+      the resume embedding using cosine similarity. If similarity is above
+      SKILL_SIM_THRESHOLD, consider it a match.
+    - Fallback to legacy normalized substring/token checks for short-circuit
+      or when the embedding model is not available.
+
+    This allows matching equivalent phrases like "football" and "soccer player".
     """
     if not required_skills:
         return []
+
+    # Normalize quick lookup text for fallback matching
     norm_text = normalize_text_for_matching(resume_text)
     matches = []
+
+    # Pre-compute resume embedding once for efficiency when using semantic match
+    resume_vec = None
+    model_available = True
+    try:
+        resume_vec = embed(resume_text)
+        resume_vec = np.asarray(resume_vec).reshape(1, -1)
+    except Exception:
+        # If embedding model fails to load for any reason, we'll fallback
+        resume_vec = None
+        model_available = False
+
+    # similarity threshold for skill <-> resume matching (0-1)
+    SKILL_SIM_THRESHOLD = 0.62
+
     for skill in required_skills:
         if not skill:
             continue
+
+        # 1) Try semantic matching when model is available
+        matched = False
+        if model_available and resume_vec is not None:
+            try:
+                skill_vec = embed(skill)
+                skill_vec = np.asarray(skill_vec).reshape(1, -1)
+                sim = float(cosine_similarity(skill_vec, resume_vec)[0][0])
+                if sim >= SKILL_SIM_THRESHOLD:
+                    matches.append(skill)
+                    matched = True
+            except Exception:
+                # Fall through to legacy matching on any error
+                matched = False
+
+        if matched:
+            continue
+
+        # 2) Legacy fallback: normalized substring or token-level check
         skill_norm = normalize_text_for_matching(skill)
-        # direct substring match
         if skill_norm and skill_norm in norm_text:
             matches.append(skill)
             continue
-        # token-level fallback: check all tokens of skill appear in text
         tokens = [t for t in skill_norm.split() if t]
         if tokens and all(token in norm_text.split() for token in tokens):
             matches.append(skill)
+
     return matches
 
 def score_job_application(job, application):
