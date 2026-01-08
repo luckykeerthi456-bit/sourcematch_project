@@ -3,6 +3,8 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import re
+import os
+import json
 
 # Lazy load model (downloads on first use, not on import)
 MODEL_NAME = "all-MiniLM-L6-v2"
@@ -68,6 +70,23 @@ def normalize_text_for_matching(text: str) -> str:
     return s
 
 
+def _read_threshold_from_settings():
+    # try backend settings file first (backend/semantic_settings.json)
+    try:
+        settings_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend", "semantic_settings.json"))
+        if os.path.exists(settings_path):
+            with open(settings_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return float(data.get("skill_threshold", 0.62))
+    except Exception:
+        pass
+    # fallback to env var
+    try:
+        return float(os.getenv("SKILL_SIM_THRESHOLD", 0.62))
+    except Exception:
+        return 0.62
+
+
 def match_required_skills(required_skills, resume_text):
     """Return list of required skills that semantically appear in resume_text.
 
@@ -100,7 +119,7 @@ def match_required_skills(required_skills, resume_text):
         model_available = False
 
     # similarity threshold for skill <-> resume matching (0-1)
-    SKILL_SIM_THRESHOLD = 0.62
+    SKILL_SIM_THRESHOLD = _read_threshold_from_settings()
 
     for skill in required_skills:
         if not skill:

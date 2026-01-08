@@ -54,6 +54,8 @@ class Job(Base):
     salary_max = Column(Integer, nullable=True)  # Maximum salary in thousands
     experience_level = Column(String, default="Mid-level")  # Junior, Mid-level, Senior
     required_skills = Column(String, nullable=True)  # Comma-separated skills
+    # Precomputed skill embeddings: list of vectors (JSON serializable)
+    skill_embeddings = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     recruiter = relationship("User")
 

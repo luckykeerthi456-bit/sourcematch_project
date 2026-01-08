@@ -40,6 +40,7 @@ app.add_middleware(
 
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
+app.include_router(__import__("backend.routes.settings", fromlist=["router"]).router, prefix="/api/settings", tags=["settings"])
 app.include_router(applications.router, prefix="/api/applications", tags=["applications"])
 
 @app.get("/health")

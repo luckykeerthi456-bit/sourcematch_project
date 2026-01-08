@@ -6,6 +6,12 @@ from ..auth import get_current_user
 from ..models import Application, MatchResult
 from ..auth import get_current_recruiter
 
+# Embed helper for precomputing skill vectors
+try:
+    from ml.scoring_service import embed
+except Exception:
+    embed = None
+
 router = APIRouter()
 
 @router.post("/", response_model=JobOut)
@@ -16,6 +22,18 @@ def create_job(payload: JobCreate, current_user: User = Depends(get_current_user
     if not current_user or getattr(current_user, "role", None) != "recruiter":
         raise HTTPException(status_code=403, detail="Only recruiters can create jobs")
     job = Job(recruiter_id=current_user.id, title=payload.title, description=payload.description, requirements=payload.requirements)
+    # store comma-separated required_skills if provided
+    if getattr(payload, "required_skills", None):
+        job.required_skills = payload.required_skills
+        # Precompute skill embeddings when model is available
+        if embed:
+            try:
+                skills = [s.strip() for s in (payload.required_skills or "").split(",") if s.strip()]
+                embeddings = [embed(s).tolist() for s in skills]
+                job.skill_embeddings = embeddings
+            except Exception:
+                # If embedding computation fails, continue without embeddings
+                job.skill_embeddings = None
     db.add(job)
     db.commit()
     db.refresh(job)
