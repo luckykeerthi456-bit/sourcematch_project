@@ -298,6 +298,49 @@ def explain_job_application(job, application):
 
         per_skill.append(detail)
 
+    # Additionally perform semantic sentence-level matching for higher-fidelity highlights
+    # If model available, embed sentences and check similarity between each skill and each sentence
+    try:
+        model = get_model()
+        # split into sentences (simple rule)
+        raw_sentences = [s.strip() for s in re.split(r'(?<=[.!?\n])\\s+', resume_text) if s.strip()]
+        if raw_sentences:
+            sent_vecs = model.encode(raw_sentences, convert_to_numpy=True)
+            # Prepare skill vectors
+            if use_precomputed:
+                skill_vecs = [np.asarray(s).reshape(-1) for s in skill_embeddings[:len(req_skills)]]
+                skill_vecs = np.vstack(skill_vecs)
+            else:
+                # encode skills in batch
+                skill_vecs = model.encode(req_skills, convert_to_numpy=True)
+
+            # Compute similarity matrix (n_skills x n_sentences)
+            sims = cosine_similarity(skill_vecs, np.asarray(sent_vecs))
+            for i, detail in enumerate(per_skill):
+                detail_sentences = []
+                for j, sent in enumerate(raw_sentences):
+                    try:
+                        sim_val = float(sims[i][j])
+                    except Exception:
+                        sim_val = None
+                    if sim_val is not None:
+                        # attach similarity if not already present
+                        if detail.get("similarity") is None:
+                            detail["similarity"] = sim_val
+                        # if sentence similarity crosses threshold, add to sentences
+                        if sim_val is not None and sim_val >= SKILL_SIM_THRESHOLD:
+                            detail_sentences.append(sent)
+                            # mark as matched by semantic sentence if not already matched
+                            if not detail["matched"]:
+                                detail["matched"] = True
+                                # indicate method if previously none or fallback
+                                detail["method"] = "semantic_precomputed_sentence" if use_precomputed and i < len(skill_embeddings) else "semantic_sentence"
+                if detail_sentences:
+                    detail["sentences"] = detail_sentences
+    except Exception:
+        # if sentence-level semantic matching fails, continue silently
+        pass
+
     matched_skills = [d["skill"] for d in per_skill if d["matched"]]
     skill_score = (len(matched_skills) / max(1, len(req_skills))) if req_skills else 0.0
     experience_score = exp_years_match(job.get("requirements", {}).get("min_experience", 0), application)

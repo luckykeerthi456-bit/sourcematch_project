@@ -391,6 +391,44 @@ def explain_application(application_id: int = Query(None), job_id: int = Query(N
     raise HTTPException(status_code=400, detail="Only application_id-based explain supported at this time")
 
 
+class ExplainRequest(BaseModel):
+    job_id: Optional[int] = None
+    resume_text: Optional[str] = None
+    job_description: Optional[str] = None
+    job_requirements: Optional[dict] = None
+
+
+@router.post("/recruiter/explain_job")
+def explain_job(req: ExplainRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
+    """Explain an arbitrary job (by id or inline description) against provided resume_text.
+
+    If `job_id` is provided, the job is loaded from the DB and its stored skill embeddings are used when available.
+    Otherwise `job_description` and `resume_text` must be provided in the request body.
+    """
+    if req.job_id:
+        job = db.query(Job).filter(Job.id == req.job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        job_obj = {
+            "description": job.description,
+            "requirements": job.requirements,
+            "skill_embeddings": getattr(job, "skill_embeddings", None),
+        }
+        resume_text = req.resume_text if req.resume_text is not None else ""
+    else:
+        if not req.job_description or not req.resume_text:
+            raise HTTPException(status_code=400, detail="Provide job_description and resume_text when job_id is not supplied")
+        job_obj = {"description": req.job_description, "requirements": req.job_requirements or {}, "skill_embeddings": None}
+        resume_text = req.resume_text
+
+    try:
+        report = scoring_utils.explain_job_application(job_obj, {"resume_text": resume_text})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Explainability failed: {str(e)}")
+
+    return report
+
+
 @router.delete("/recruiter/applications/{application_id}")
 def delete_application(application_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
     """Delete an application (used by recruiters)."""
