@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Toast from "./components/Toast";
 import ConfirmModal from "./components/ConfirmModal";
+import SettingsPanel from "./components/SettingsPanel";
 export default function RecruiterDashboard({ API, user, onLogout }) {
   const [activeTab, setActiveTab] = useState("applications");
   const [applications, setApplications] = useState([]);
@@ -23,6 +24,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
   const [salaryMax, setSalaryMax] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("Mid-level");
   const [requiredSkills, setRequiredSkills] = useState("");
+  // (Settings UI moved to SettingsPanel component)
 
   // Helper to format scores robustly to 0-100 percent
   const formatPercent = (score) => {
@@ -94,6 +96,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
       setLoading(false);
     }
   };
+  // Settings logic moved into SettingsPanel component (fetch/save/validate)
 
   const fetchApplicationDetails = async (applicationId) => {
     try {
@@ -213,6 +216,18 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
     }
   };
 
+  const isPrivileged = user && (user.role === "recruiter" || user.role === "admin");
+  const navTabs = [
+    { id: "applications", label: "📋 Applications", show: true },
+    { id: "post_job", label: "➕ Post Job", show: true },
+    { id: "users", label: "� Users", show: true },
+    { id: "stats", label: "�📊 Statistics", show: true },
+    { id: "jobs", label: "🛠️ Manage Jobs", show: true },
+  ];
+  if (isPrivileged) {
+    navTabs.push({ id: "settings", label: "⚙️ Settings", show: true });
+  }
+
   return (
     <div style={{ fontFamily: "Arial, sans-serif", background: "#F8FAFF", minHeight: "100vh" }}>
       {/* Header */}
@@ -261,13 +276,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
           gap: 0,
         }}
       >
-        {[
-          { id: "applications", label: "📋 Applications", show: true },
-          { id: "post_job", label: "➕ Post Job", show: true },
-          { id: "users", label: "� Users", show: true },
-          { id: "stats", label: "�📊 Statistics", show: true },
-          { id: "jobs", label: "🛠️ Manage Jobs", show: true },
-        ].map(
+        {navTabs.map(
           (tab) =>
             tab.show && (
               <button
@@ -287,6 +296,10 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
                 {tab.label}
               </button>
             )
+        )}
+        {/* SETTINGS TAB (rendered only for privileged users) */}
+        {activeTab === "settings" && (
+          <SettingsPanel API={API} user={user} setMessage={setMessage} />
         )}
       </div>
 
