@@ -328,6 +328,69 @@ def get_application_details(application_id: int, db: Session = Depends(get_db), 
     }
 
 
+@router.get("/recruiter/explain")
+def explain_application(application_id: int = Query(None), job_id: int = Query(None), db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
+    """Return an explainability report for a given application (or job+resume) for recruiters.
+
+    If application_id provided, load the Application and its Job. Otherwise, job_id must be provided and a resume_text query param should be used (not implemented here).
+    """
+    if not application_id and not job_id:
+        raise HTTPException(status_code=400, detail="Provide application_id or job_id")
+
+    if application_id:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+        job = db.query(Job).filter(Job.id == app.job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found for application")
+
+        # Call scoring explain helper
+        try:
+            report = scoring_utils.explain_job_application({
+                "description": job.description,
+                "requirements": job.requirements,
+                "skill_embeddings": getattr(job, "skill_embeddings", None),
+            }, {"resume_text": app.resume_text or "", "fingerprint": getattr(app, "fingerprint", None)})
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Explainability failed: {str(e)}")
+
+        # Build simple sentence-level highlights based on token matches
+        highlights = []
+        try:
+            resume_text = str(app.resume_text or "")
+            # split into sentences (simple split)
+            sentences = [s.strip() for s in re.split(r"(?<=[.!?\n])\\s+", resume_text) if s.strip()]
+            # gather tokens/phrases from per_skill
+            per_skill = report.get("per_skill", [])
+            for skill_detail in per_skill:
+                skill = skill_detail.get("skill")
+                tokens = skill_detail.get("tokens_matched", []) or []
+                method = skill_detail.get("method")
+                # also include full normalized skill phrase
+                if skill:
+                    tokens.append(skill)
+                matched_sentences = []
+                for s in sentences:
+                    s_norm = re.sub(r"[\W_]+", " ", s.lower()).strip()
+                    for t in tokens:
+                        if not t:
+                            continue
+                        if t.lower() in s_norm:
+                            matched_sentences.append(s)
+                            break
+                if matched_sentences:
+                    highlights.append({"skill": skill, "method": method, "sentences": matched_sentences})
+        except Exception:
+            highlights = []
+
+        report["highlights"] = highlights
+        return report
+
+    # If only job_id provided (and no application_id) we could accept resume_text in the future.
+    raise HTTPException(status_code=400, detail="Only application_id-based explain supported at this time")
+
+
 @router.delete("/recruiter/applications/{application_id}")
 def delete_application(application_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_recruiter)):
     """Delete an application (used by recruiters)."""

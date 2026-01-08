@@ -203,6 +203,127 @@ def score_job_application(job, application):
         explanation["reasons"].append("Insufficient apparent experience")
     return composite, explanation
 
+
+def explain_job_application(job, application):
+    """Return a detailed explainability report for why a resume scored as it did for a job.
+
+    The report includes per-skill similarity scores (semantic if available),
+    match method (semantic precomputed / semantic on-the-fly / substring),
+    tokens matched, and the contribution of each component to the final score.
+    """
+    job_desc = job.get("description", "")
+    resume_text = application.get("resume_text", "")
+
+    # Compute job and resume embeddings (best-effort)
+    try:
+        job_vec = embed(job_desc)
+        job_vec_2d = np.asarray(job_vec).reshape(1, -1)
+    except Exception:
+        job_vec_2d = None
+    try:
+        resume_vec = embed(resume_text)
+        resume_vec_2d = np.asarray(resume_vec).reshape(1, -1)
+    except Exception:
+        resume_vec_2d = None
+
+    emb_sim = 0.0
+    if job_vec_2d is not None and resume_vec_2d is not None:
+        emb_sim = float(cosine_similarity(job_vec_2d, resume_vec_2d)[0][0])
+
+    req_skills = job.get("requirements", {}).get("required_skills", []) or []
+    skill_embeddings = job.get("skill_embeddings", None)
+
+    # Skill-level details
+    per_skill = []
+    # Precompute normalized resume text for substring matches
+    norm_text = normalize_text_for_matching(resume_text)
+    resume_vec_for_sim = None
+    try:
+        resume_vec_for_sim = resume_vec_2d
+    except Exception:
+        resume_vec_for_sim = None
+
+    SKILL_SIM_THRESHOLD = _read_threshold_from_settings()
+    use_precomputed = skill_embeddings is not None and isinstance(skill_embeddings, (list, tuple)) and len(skill_embeddings) > 0
+
+    for idx, skill in enumerate(req_skills):
+        detail = {"skill": skill, "matched": False, "method": None, "similarity": None, "tokens_matched": []}
+        if not skill:
+            per_skill.append(detail)
+            continue
+
+        # Try precomputed semantic
+        sim = None
+        if use_precomputed and idx < len(skill_embeddings) and resume_vec_for_sim is not None:
+            try:
+                se = np.asarray(skill_embeddings[idx]).reshape(1, -1)
+                sim = float(cosine_similarity(se, resume_vec_for_sim)[0][0])
+                detail["similarity"] = sim
+                if sim >= SKILL_SIM_THRESHOLD:
+                    detail["matched"] = True
+                    detail["method"] = "semantic_precomputed"
+            except Exception:
+                sim = None
+
+        # On-the-fly semantic
+        if not detail["matched"] and sim is None and resume_vec_for_sim is not None:
+            try:
+                skill_vec = embed(skill)
+                skill_vec = np.asarray(skill_vec).reshape(1, -1)
+                sim = float(cosine_similarity(skill_vec, resume_vec_for_sim)[0][0])
+                detail["similarity"] = sim
+                if sim >= SKILL_SIM_THRESHOLD:
+                    detail["matched"] = True
+                    detail["method"] = "semantic_on_the_fly"
+            except Exception:
+                pass
+
+        # Legacy substring/token fallback
+        if not detail["matched"]:
+            skill_norm = normalize_text_for_matching(skill)
+            if skill_norm and skill_norm in norm_text:
+                detail["matched"] = True
+                detail["method"] = "substring"
+                detail["tokens_matched"] = [skill_norm]
+            else:
+                tokens = [t for t in skill_norm.split() if t]
+                matched_tokens = [t for t in tokens if t in norm_text.split()]
+                if tokens and len(matched_tokens) == len(tokens):
+                    detail["matched"] = True
+                    detail["method"] = "tokens_all"
+                    detail["tokens_matched"] = matched_tokens
+                elif matched_tokens:
+                    # partial token match
+                    detail["tokens_matched"] = matched_tokens
+
+        per_skill.append(detail)
+
+    matched_skills = [d["skill"] for d in per_skill if d["matched"]]
+    skill_score = (len(matched_skills) / max(1, len(req_skills))) if req_skills else 0.0
+    experience_score = exp_years_match(job.get("requirements", {}).get("min_experience", 0), application)
+
+    # Composite breakdown
+    weights = {"embedding": 0.40, "skills": 0.35, "experience": 0.25}
+    emb_contrib = emb_sim * weights["embedding"]
+    skills_contrib = skill_score * weights["skills"]
+    exp_contrib = experience_score * weights["experience"]
+    composite = emb_contrib + skills_contrib + exp_contrib
+    composite = max(0.0, min(1.0, composite))
+
+    report = {
+        "composite_score": composite,
+        "components": {
+            "embedding_similarity": {"value": emb_sim, "weight": weights["embedding"], "contribution": emb_contrib},
+            "skill_score": {"value": skill_score, "weight": weights["skills"], "contribution": skills_contrib},
+            "experience_score": {"value": experience_score, "weight": weights["experience"], "contribution": exp_contrib},
+        },
+        "per_skill": per_skill,
+        "matched_skills": matched_skills,
+        "settings": {"skill_similarity_threshold": SKILL_SIM_THRESHOLD}
+    }
+
+    return report
+
 if __name__ == "__main__":
     # simple manual test
     job = {"description": "Looking for a React developer with 3+ years experience and knowledge of Docker and Node.js", "requirements": {"required_skills": ["React","Docker","Node.js"], "min_experience": 3}}

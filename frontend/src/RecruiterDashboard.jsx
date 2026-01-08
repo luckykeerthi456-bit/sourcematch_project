@@ -14,6 +14,9 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState(() => () => {});
   const [filterStatus, setFilterStatus] = useState("all");
+  const [explainOpen, setExplainOpen] = useState(false);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainReport, setExplainReport] = useState(null);
   // Job posting form state for recruiters
   const [jobTitle, setJobTitle] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -107,6 +110,47 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
       console.error("Failed to load application details:", err);
       setMessage("Failed to load application details");
     }
+  };
+
+  const fetchExplain = async (applicationId) => {
+    setExplainLoading(true);
+    setExplainReport(null);
+    try {
+      const res = await axios.get(API + `/recruiter/explain?application_id=${applicationId}`);
+      setExplainReport(res.data);
+      setExplainOpen(true);
+    } catch (err) {
+      console.error("Failed to fetch explanation:", err);
+      setMessage(err?.response?.data?.detail || "Failed to fetch explanation");
+    } finally {
+      setExplainLoading(false);
+    }
+  };
+
+  const renderHighlightedResume = (text) => {
+    if (!text) return <p style={{ margin: 0, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap", wordWrap: "break-word", fontSize: 13 }}>No resume text available</p>;
+    // build a set of highlighted sentences from explainReport
+    const highlightsSet = new Set();
+    if (explainReport && explainReport.highlights) {
+      explainReport.highlights.forEach((h) => {
+        (h.sentences || []).forEach(s => highlightsSet.add(s.trim()));
+      });
+    }
+
+    // split into sentences
+    const sentences = text.split(/(?<=[.!?\n])\s+/).filter(s => s && s.trim());
+    return (
+      <div style={{ color: "#374151", lineHeight: 1.6, fontSize: 13 }}>
+        {sentences.map((s, i) => {
+          const trimmed = s.trim();
+          const isHighlighted = highlightsSet.has(trimmed);
+          if (isHighlighted) {
+            return <p key={i} style={{ margin: "0 0 8px 0" }}><mark style={{ background: "#fff7cc", padding: "2px 4px", borderRadius: 4 }}>{trimmed}</mark></p>;
+          }
+          return <p key={i} style={{ margin: "0 0 8px 0" }}>{trimmed}</p>;
+        })}
+      </div>
+    );
   };
 
   const updateApplicationStatus = async (applicationId, newStatus) => {
@@ -476,7 +520,7 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
                         marginBottom: 12,
                       }}
                     >
-                      <div
+                        <div
                         style={{
                           width: "100%",
                           background: "#e5e7eb",
@@ -486,21 +530,19 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
                         }}
                       >
                         <div
+                          onClick={() => fetchExplain(selectedApp.application_id)}
                           style={{
                             width: `${formatPercent(selectedApp.score)}%`,
                             background: "#667eea",
                             height: "100%",
+                            cursor: "pointer",
                           }}
                         />
                       </div>
                       <p
-                        style={{
-                          margin: 0,
-                          fontWeight: 700,
-                          fontSize: 16,
-                          color: "#667eea",
-                          minWidth: 50,
-                        }}
+                        onClick={() => fetchExplain(selectedApp.application_id)}
+                        title="Click to view explanation"
+                        style={{ cursor: "pointer", margin: 0, fontWeight: 700, fontSize: 16, color: "#667eea", minWidth: 50 }}
                       >
                         {formatPercent(selectedApp.score)}%
                       </p>
@@ -576,18 +618,9 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
                     <p style={{ margin: "0 0 12px 0", fontWeight: 600, color: "#6b7280" }}>
                       Resume Preview:
                     </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#374151",
-                        lineHeight: 1.6,
-                        whiteSpace: "pre-wrap",
-                        wordWrap: "break-word",
-                        fontSize: 13,
-                      }}
-                    >
-                      {selectedApp.resume_text || "No resume text available"}
-                    </p>
+                    <div style={{ margin: 0 }}>
+                      {renderHighlightedResume(selectedApp.resume_text)}
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -1163,6 +1196,70 @@ export default function RecruiterDashboard({ API, user, onLogout }) {
           </div>
         )}
       </main>
+      {/* Explanation Modal */}
+      {explainOpen && explainReport && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setExplainOpen(false)}>
+          <div style={{ width: "90%", maxWidth: 900, background: "#fff", borderRadius: 10, padding: 20 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Match Explanation</h3>
+              <button onClick={() => setExplainOpen(false)} style={{ background: "transparent", border: "none", fontSize: 18, cursor: "pointer" }}>✕</button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <p style={{ margin: "0 0 6px 0", fontWeight: 600 }}>Score Breakdown</p>
+                <div style={{ background: "#f3f4f6", padding: 12, borderRadius: 8 }}>
+                  <p style={{ margin: "0 0 6px 0" }}>Embedding similarity: {(explainReport.components.embedding_similarity.value * 100).toFixed(1)}% (contribution {(explainReport.components.embedding_similarity.contribution * 100).toFixed(1)}%)</p>
+                  <p style={{ margin: "0 0 6px 0" }}>Skills match: {(explainReport.components.skill_score.value * 100).toFixed(1)}% (contribution {(explainReport.components.skill_score.contribution * 100).toFixed(1)}%)</p>
+                  <p style={{ margin: "0 0 6px 0" }}>Experience: {(explainReport.components.experience_score.value * 100).toFixed(1)}% (contribution {(explainReport.components.experience_score.contribution * 100).toFixed(1)}%)</p>
+                  <p style={{ marginTop: 8, fontWeight: 700 }}>Final score: {(explainReport.composite_score * 100).toFixed(0)}%</p>
+                </div>
+              </div>
+
+              <div>
+                <p style={{ margin: "0 0 6px 0", fontWeight: 600 }}>Matched Skills</p>
+                <div style={{ background: "#f3f4f6", padding: 12, borderRadius: 8 }}>
+                  {explainReport.per_skill && explainReport.per_skill.length > 0 ? (
+                    (() => {
+                      const highlightsBySkill = {};
+                      (explainReport.highlights || []).forEach(h => { highlightsBySkill[h.skill] = h.sentences || []; });
+                      return explainReport.per_skill.map((p, i) => (
+                        <div key={i} style={{ marginBottom: 8 }}>
+                          <p style={{ margin: 0, fontWeight: 700 }}>{p.skill}</p>
+                          <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Method: {p.method || "none"} {p.similarity ? `• sim ${(p.similarity*100).toFixed(1)}%` : ""}</p>
+                          {p.tokens_matched && p.tokens_matched.length > 0 && (
+                            <p style={{ margin: "4px 0 0 0", fontSize: 13 }}>Tokens: {p.tokens_matched.join(", ")}</p>
+                          )}
+                          {(highlightsBySkill[p.skill] || []).length > 0 && (
+                            <div style={{ marginTop: 6 }}>
+                              <p style={{ margin: "0 0 6px 0", fontSize: 13, fontWeight: 600 }}>Matched Sentences:</p>
+                              {(highlightsBySkill[p.skill] || []).map((s, si) => (
+                                <p key={si} style={{ margin: "0 0 6px 0", background: "#fff7cc", padding: 6, borderRadius: 4 }}>{s}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ));
+                    })()
+                  ) : (
+                    <p style={{ margin: 0 }}>No skill-level details available</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {explainReport.reasons && explainReport.reasons.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <p style={{ margin: "0 0 6px 0", fontWeight: 600 }}>Notes</p>
+                <ul>
+                  {explainReport.reasons.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
